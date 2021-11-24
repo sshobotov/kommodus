@@ -1,21 +1,16 @@
 package com.github.kommodus
 
-import com.github.kommodus.constraints.definitions.NullableConstraint
-import com.github.kommodus.constraints.includeNullableInput
 import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty1
 
 /**
  * TODO:
- *   - validate single value
- *   - validate collection
  *   - validate nested
+ *   - validate collection
  *   - validate dependent fields
  *   - extensibility
  *   - composable
- *   - i18n support
  */
-
 interface Validation<T> {
     fun invoke(value: T): Result<T>
 
@@ -92,14 +87,30 @@ class ValidationDescriptor<T> internal constructor(
         ValidationDescriptor(this.constraints + (property to ConstraintsRun(property, constraints)))
 }
 
+sealed class RepeatableDescriptor<E> {
+    abstract fun includes(constraint: Validation.Constraint<E>): Terminal<E>
+
+    class Opened<E> internal constructor(): RepeatableDescriptor<E>() {
+        override fun includes(constraint: Validation.Constraint<E>): Terminal<E> =
+            Terminal(listOf(constraint))
+    }
+
+    class Terminal<E> internal constructor(
+        internal val constraints: List<Validation.Constraint<E>>
+    ): RepeatableDescriptor<E>() {
+        override fun includes(constraint: Validation.Constraint<E>): Terminal<E> =
+            Terminal(constraints + constraint)
+    }
+}
+
 sealed class FieldDescriptor<T, A> {
-    abstract fun add(constraint: Validation.Constraint<A>): Terminal<T, A>
+    abstract fun includes(constraint: Validation.Constraint<A>): Terminal<T, A>
 
     class Opened<T, A> internal constructor(
         private val property: KProperty1<T, A>,
         private val container: ValidationDescriptor<T>
     ): FieldDescriptor<T, A>() {
-        override fun add(constraint: Validation.Constraint<A>): Terminal<T, A> =
+        override fun includes(constraint: Validation.Constraint<A>): Terminal<T, A> =
             Terminal(property, container, listOf(constraint))
     }
 
@@ -108,7 +119,7 @@ sealed class FieldDescriptor<T, A> {
         private val container: ValidationDescriptor<T>,
         private val constraints: List<Validation.Constraint<A>>
     ): FieldDescriptor<T, A>(), Validation<T> {
-        override fun add(constraint: Validation.Constraint<A>): Terminal<T, A> =
+        override fun includes(constraint: Validation.Constraint<A>): Terminal<T, A> =
             Terminal(property, container, constraints + constraint)
 
         fun <B> where(property: KProperty1<T, B>): Opened<T, B> =
@@ -117,4 +128,40 @@ sealed class FieldDescriptor<T, A> {
         override fun invoke(value: T): Validation.Result<T> =
             container.put(this.property, constraints).invoke(value)
     }
+}
+
+/**
+ * Wrapper constraint to provide single metod definitions for the same nullable and non-nullable type
+ * e.g. String and String?
+ */
+internal data class NullableConstraint<T>(
+    val inner: Validation.Constraint<T>,
+    private val ifNullResult: Boolean
+): Validation.Constraint<T?> {
+    override fun message(): String = inner.message()
+
+    override fun check(value: T?): Boolean =
+        if (value == null) ifNullResult else inner.check(value)
+}
+
+internal data class ValidPropertiesConstraint<T>(
+    private val nested: Validation<T>
+): Validation.Constraint<T> {
+    override fun message(): String = TODO()
+
+    override fun check(value: T): Boolean =
+        nested.invoke(value).isValid()
+}
+
+internal data class ValidElementsConstraint<E, T: Collection<E>>(
+    private val nested: List<Validation.Constraint<E>>
+): Validation.Constraint<T> {
+    override fun message(): String = TODO()
+
+    override fun check(value: T): Boolean =
+        value.mapIndexedNotNull { i, element ->
+            nested.filter { it.check(element) }
+                .takeIf { it.isNotEmpty() }
+                ?.let { i to it }
+        }.isNotEmpty()
 }
