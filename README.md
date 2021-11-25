@@ -2,6 +2,9 @@
 Kotlin validation with a focus on readability
 
 ```kotlin
+import com.github.kommodus.constraints.*
+import com.github.kommodus.Validation
+
 data class Test(val one: Int, val two: String?, val three: String, val four: Double?)
 data class Test2(val head: Test, val rest: List<Test>, val some: List<Long>)
 
