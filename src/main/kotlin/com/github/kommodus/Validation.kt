@@ -88,29 +88,29 @@ class ValidationDescriptor<T> internal constructor(
 }
 
 sealed class RepeatableDescriptor<E> {
-    abstract fun includes(constraint: Validation.Constraint<E>): Terminal<E>
+    abstract fun demands(constraint: Validation.Constraint<E>): Terminal<E>
 
     class Opened<E> internal constructor(): RepeatableDescriptor<E>() {
-        override fun includes(constraint: Validation.Constraint<E>): Terminal<E> =
+        override fun demands(constraint: Validation.Constraint<E>): Terminal<E> =
             Terminal(listOf(constraint))
     }
 
     class Terminal<E> internal constructor(
         internal val constraints: List<Validation.Constraint<E>>
     ): RepeatableDescriptor<E>() {
-        override fun includes(constraint: Validation.Constraint<E>): Terminal<E> =
+        override fun demands(constraint: Validation.Constraint<E>): Terminal<E> =
             Terminal(constraints + constraint)
     }
 }
 
 sealed class FieldDescriptor<T, A> {
-    abstract fun includes(constraint: Validation.Constraint<A>): Terminal<T, A>
+    abstract fun demands(constraint: Validation.Constraint<A>): Terminal<T, A>
 
     class Opened<T, A> internal constructor(
         private val property: KProperty1<T, A>,
         private val container: ValidationDescriptor<T>
     ): FieldDescriptor<T, A>() {
-        override fun includes(constraint: Validation.Constraint<A>): Terminal<T, A> =
+        override fun demands(constraint: Validation.Constraint<A>): Terminal<T, A> =
             Terminal(property, container, listOf(constraint))
     }
 
@@ -119,7 +119,7 @@ sealed class FieldDescriptor<T, A> {
         private val container: ValidationDescriptor<T>,
         private val constraints: List<Validation.Constraint<A>>
     ): FieldDescriptor<T, A>(), Validation<T> {
-        override fun includes(constraint: Validation.Constraint<A>): Terminal<T, A> =
+        override fun demands(constraint: Validation.Constraint<A>): Terminal<T, A> =
             Terminal(property, container, constraints + constraint)
 
         fun <B> where(property: KProperty1<T, B>): Opened<T, B> =
@@ -131,17 +131,16 @@ sealed class FieldDescriptor<T, A> {
 }
 
 /**
- * Wrapper constraint to provide single metod definitions for the same nullable and non-nullable type
+ * Wrapper constraint to provide single method definitions for the same nullable and non-nullable type
  * e.g. String and String?
  */
 internal data class NullableConstraint<T>(
-    val inner: Validation.Constraint<T>,
-    private val ifNullResult: Boolean
+    val inner: Validation.Constraint<T>
 ): Validation.Constraint<T?> {
     override fun message(): String = inner.message()
 
     override fun check(value: T?): Boolean =
-        if (value == null) ifNullResult else inner.check(value)
+        if (value == null) true else inner.check(value)
 }
 
 internal data class ValidPropertiesConstraint<T>(
