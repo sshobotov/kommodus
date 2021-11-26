@@ -7,6 +7,24 @@ import kotlin.reflect.KProperty1
 fun <T, A> FieldDescriptor<T, A?>.required(): FieldDescriptor.Terminal<T, A?> =
     demands(Required())
 
+fun <T, C, A: C?> FieldDescriptor<T, A>.satisfies(
+    message: String,
+    predicate: (C) -> Boolean
+): FieldDescriptor.Terminal<T, A> =
+    demands(Predicate(predicate, message).considerNullableInput())
+
+fun <A> RepeatableDescriptor<A>.satisfies(
+    message: String,
+    predicate: (A) -> Boolean
+): RepeatableDescriptor.Terminal<A> =
+    demands(Predicate(predicate, message))
+
+fun <T> ClassDescriptor<T>.satisfies(
+    message: String,
+    predicate: (T) -> Boolean
+): ClassDescriptor.Terminal<T> =
+    demands(Predicate(predicate, message))
+
 fun <T, C: Comparable<C>, A: C?> FieldDescriptor<T, A>.maximum(
     limit: C,
     inclusive: Boolean = true
@@ -30,18 +48,6 @@ fun <A: Comparable<A>> RepeatableDescriptor<A>.minimum(
     inclusive: Boolean = true
 ): RepeatableDescriptor.Terminal<A> =
     demands(Minimum(limit, inclusive))
-
-fun <T, A: String?> FieldDescriptor<T, A>.notBlank(): FieldDescriptor.Terminal<T, A> =
-    demands(NotBlank.considerNullableInput())
-
-fun RepeatableDescriptor<String>.notBlank(): RepeatableDescriptor.Terminal<String> =
-    demands(NotBlank)
-
-fun <T, A: String?> FieldDescriptor<T, A>.matches(pattern: Regex, description: String): FieldDescriptor.Terminal<T, A> =
-    demands(Matches(pattern, description).considerNullableInput())
-
-fun RepeatableDescriptor<String>.matches(pattern: Regex, description: String): RepeatableDescriptor.Terminal<String> =
-    demands(Matches(pattern, description))
 
 fun <T, E, A: Collection<E>?> FieldDescriptor<T, A>.notEmpty(): FieldDescriptor.Terminal<T, A> =
     demands(NotEmpty<Collection<E>>().considerNullableInput())

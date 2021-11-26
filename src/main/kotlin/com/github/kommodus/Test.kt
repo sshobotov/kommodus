@@ -30,7 +30,7 @@ fun main(args: Array<String>) {
         Validation
             .where(Test2::head).hasValidProperties(
                 Validation
-                    .where(Test::three).notBlank()
+                    .where(Test::three).notBlank().matches(Regex("^#[a-f]{6}$"), "Color hex")
             )
             .where(Test2::rest).notEmpty().forEachElement {
                 it.hasValidProperties(
@@ -47,7 +47,9 @@ fun main(args: Array<String>) {
     val validator3 =
         Validation
             .where<Changes>().hasAtLeastOneNotNull(Changes::geometry, Changes::position)
-            .where(Changes::geometry).hasAtLeastOneNotNull(Geometry::width, Geometry::height)
+            .where(Changes::geometry).satisfies("Either height or width should be provided") {
+                (it.height == null) xor (it.width == null)
+            }
             .where(Changes::position).hasAtLeastOneNotNull(Position::x, Position::y)
 
     val result3 = validator3.invoke(instance3)
