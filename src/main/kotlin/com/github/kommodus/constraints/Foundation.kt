@@ -8,7 +8,7 @@ fun <T, C, A: C?> FieldDescriptor<T, A>.hasValidProperties(nested: Validation<C>
     demands(ValidPropertiesConstraint(nested).considerNullableInput())
 
 fun <A> RepeatableDescriptor<A>.hasValidProperties(nested: Validation<A>): RepeatableDescriptor.Terminal<A> =
-    demands(ValidPropertiesConstraint(nested).considerNullableInput())
+    demands(ValidPropertiesConstraint(nested))
 
 fun <T, E, A: Collection<E>?> FieldDescriptor<T, A>.forEachElement(
     nested: (RepeatableDescriptor.Opened<E>) -> RepeatableDescriptor.Terminal<E>

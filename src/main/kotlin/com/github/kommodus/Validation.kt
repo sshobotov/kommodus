@@ -10,6 +10,7 @@ import kotlin.reflect.KProperty1
  *   - validate dependent fields
  *   - extensibility
  *   - composable
+ *   - java beans interoperability
  */
 interface Validation<T> {
     fun invoke(value: T): Result<T>
@@ -29,7 +30,7 @@ interface Validation<T> {
             override fun isValid(): Boolean = true
         }
 
-        data class Invalid<T>(val errors: Map<KProperty<*>, List<Constraint<*>>>): Result<T>() {
+        data class Invalid<T>(val errors: Map<KProperty<*>?, List<Constraint<*>>>): Result<T>() {
             override fun isValid(): Boolean = false
         }
     }
@@ -37,14 +38,20 @@ interface Validation<T> {
     companion object {
         fun <T, A> where(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
             ValidationDescriptor<T>().where(property)
+
+        fun <T> where(): ClassDescriptor.Opened<T> =
+            ValidationDescriptor<T>().where()
     }
 }
 
 class ValidationDescriptor<T> internal constructor(
-    private val constraints: Map<KProperty1<T, *>, ConstraintsRun<T>> = mapOf()
+    private val constraints: Map<KProperty1<T, *>?, ConstraintsRun<T>> = mapOf()
 ): Validation<T> {
     fun <A> where(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
         FieldDescriptor.Opened(property, this)
+
+    fun where(): ClassDescriptor.Opened<T> =
+        ClassDescriptor.Opened(this)
 
     override fun invoke(value: T): Validation.Result<T> =
         constraints.mapNotNull { entry ->
@@ -68,6 +75,13 @@ class ValidationDescriptor<T> internal constructor(
                     collectFailedConstraints(constraints, property.get(instance))
                 }
 
+            operator fun <T> invoke(
+                constraints: List<Validation.Constraint<T>>
+            ): ConstraintsRun<T> =
+                ConstraintsRun { instance ->
+                    collectFailedConstraints(constraints, instance)
+                }
+
             private fun <A> collectFailedConstraints(constraints: List<Validation.Constraint<A>>, value: A) =
                 constraints
                     .mapNotNull { constraint ->
@@ -85,6 +99,36 @@ class ValidationDescriptor<T> internal constructor(
         constraints: List<Validation.Constraint<A>>
     ): ValidationDescriptor<T> =
         ValidationDescriptor(this.constraints + (property to ConstraintsRun(property, constraints)))
+
+    internal fun put(
+        constraints: List<Validation.Constraint<T>>
+    ): ValidationDescriptor<T> =
+        ValidationDescriptor(this.constraints + (null to ConstraintsRun(constraints)))
+}
+
+sealed class ClassDescriptor<T> {
+    abstract fun demands(constraint: Validation.Constraint<T>): Terminal<T>
+
+    class Opened<T> internal constructor(
+        private val container: ValidationDescriptor<T>
+    ): ClassDescriptor<T>() {
+        override fun demands(constraint: Validation.Constraint<T>): Terminal<T> =
+            Terminal(container, listOf(constraint))
+    }
+
+    class Terminal<T> internal constructor(
+        private val container: ValidationDescriptor<T>,
+        private val constraints: List<Validation.Constraint<T>>
+    ): ClassDescriptor<T>(), Validation<T> {
+        override fun demands(constraint: Validation.Constraint<T>): Terminal<T> =
+            Terminal(container, constraints + constraint)
+
+        fun <B> where(property: KProperty1<T, B>): FieldDescriptor.Opened<T, B> =
+            container.put(constraints).where(property)
+
+        override fun invoke(value: T): Validation.Result<T> =
+            container.put(constraints).invoke(value)
+    }
 }
 
 sealed class RepeatableDescriptor<E> {
