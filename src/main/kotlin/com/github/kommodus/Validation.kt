@@ -13,7 +13,7 @@ import kotlin.reflect.KProperty1
  *   - java beans interoperability
  */
 interface Validation<T> {
-    fun invoke(value: T): Result<T>
+    fun applyTo(value: T): Result<T>
 
     interface Constraint<in T> {
         fun message(): String
@@ -36,24 +36,24 @@ interface Validation<T> {
     }
 
     companion object {
-        fun <T, A> where(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
-            ValidationDescriptor<T>().where(property)
+        fun <T, A> whereProperty(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
+            ValidationDescriptor<T>().whereProperty(property)
 
-        fun <T> where(): ClassDescriptor.Opened<T> =
-            ValidationDescriptor<T>().where()
+        fun <T> whereInstanceOf(): ClassDescriptor.Opened<T> =
+            ValidationDescriptor<T>().whereInstance()
     }
 }
 
 class ValidationDescriptor<T> internal constructor(
     private val constraints: Map<KProperty1<T, *>?, ConstraintsRun<T>> = mapOf()
 ): Validation<T> {
-    fun <A> where(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
+    fun <A> whereProperty(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
         FieldDescriptor.Opened(property, this)
 
-    fun where(): ClassDescriptor.Opened<T> =
+    fun whereInstance(): ClassDescriptor.Opened<T> =
         ClassDescriptor.Opened(this)
 
-    override fun invoke(value: T): Validation.Result<T> =
+    override fun applyTo(value: T): Validation.Result<T> =
         constraints.mapNotNull { entry ->
             entry.value.run(value)?.let { entry.key to it }
         }.let { propertiesViolations ->
@@ -86,7 +86,7 @@ class ValidationDescriptor<T> internal constructor(
                 constraints
                     .mapNotNull { constraint ->
                         if (constraint.check(value)) null else when (constraint) {
-                            is NullableConstraint<*> -> constraint.inner
+                            is ValidNullableConstraint<*> -> constraint.inner
                             else -> constraint
                         }
                     }
@@ -123,38 +123,38 @@ sealed class ClassDescriptor<T> {
         override fun demands(constraint: Validation.Constraint<T>): Terminal<T> =
             Terminal(container, constraints + constraint)
 
-        fun <B> where(property: KProperty1<T, B>): FieldDescriptor.Opened<T, B> =
-            container.put(constraints).where(property)
+        fun <B> andProperty(property: KProperty1<T, B>): FieldDescriptor.Opened<T, B> =
+            container.put(constraints).whereProperty(property)
 
-        override fun invoke(value: T): Validation.Result<T> =
-            container.put(constraints).invoke(value)
+        override fun applyTo(value: T): Validation.Result<T> =
+            container.put(constraints).applyTo(value)
     }
 }
 
 sealed class RepeatableDescriptor<E> {
-    abstract fun demands(constraint: Validation.Constraint<E>): Terminal<E>
+    abstract fun satisfies(constraint: Validation.Constraint<E>): Terminal<E>
 
     class Opened<E> internal constructor(): RepeatableDescriptor<E>() {
-        override fun demands(constraint: Validation.Constraint<E>): Terminal<E> =
+        override fun satisfies(constraint: Validation.Constraint<E>): Terminal<E> =
             Terminal(listOf(constraint))
     }
 
     class Terminal<E> internal constructor(
         internal val constraints: List<Validation.Constraint<E>>
     ): RepeatableDescriptor<E>() {
-        override fun demands(constraint: Validation.Constraint<E>): Terminal<E> =
+        override fun satisfies(constraint: Validation.Constraint<E>): Terminal<E> =
             Terminal(constraints + constraint)
     }
 }
 
 sealed class FieldDescriptor<T, A> {
-    abstract fun demands(constraint: Validation.Constraint<A>): Terminal<T, A>
+    abstract fun satisfies(constraint: Validation.Constraint<A>): Terminal<T, A>
 
     class Opened<T, A> internal constructor(
         private val property: KProperty1<T, A>,
         private val container: ValidationDescriptor<T>
     ): FieldDescriptor<T, A>() {
-        override fun demands(constraint: Validation.Constraint<A>): Terminal<T, A> =
+        override fun satisfies(constraint: Validation.Constraint<A>): Terminal<T, A> =
             Terminal(property, container, listOf(constraint))
     }
 
@@ -163,14 +163,14 @@ sealed class FieldDescriptor<T, A> {
         private val container: ValidationDescriptor<T>,
         private val constraints: List<Validation.Constraint<A>>
     ): FieldDescriptor<T, A>(), Validation<T> {
-        override fun demands(constraint: Validation.Constraint<A>): Terminal<T, A> =
+        override fun satisfies(constraint: Validation.Constraint<A>): Terminal<T, A> =
             Terminal(property, container, constraints + constraint)
 
-        fun <B> where(property: KProperty1<T, B>): Opened<T, B> =
-            container.put(this.property, constraints).where(property)
+        fun <B> andProperty(property: KProperty1<T, B>): Opened<T, B> =
+            container.put(this.property, constraints).whereProperty(property)
 
-        override fun invoke(value: T): Validation.Result<T> =
-            container.put(this.property, constraints).invoke(value)
+        override fun applyTo(value: T): Validation.Result<T> =
+            container.put(this.property, constraints).applyTo(value)
     }
 }
 
@@ -178,7 +178,7 @@ sealed class FieldDescriptor<T, A> {
  * Wrapper constraint to provide single method definitions for the same nullable and non-nullable type
  * e.g. String and String?
  */
-internal data class NullableConstraint<T>(
+internal data class ValidNullableConstraint<T>(
     val inner: Validation.Constraint<T>
 ): Validation.Constraint<T?> {
     override fun message(): String = inner.message()
@@ -187,13 +187,13 @@ internal data class NullableConstraint<T>(
         if (value == null) true else inner.check(value)
 }
 
-internal data class ValidPropertiesConstraint<T>(
+internal data class ValidIfAppliedConstraint<T>(
     private val nested: Validation<T>
 ): Validation.Constraint<T> {
     override fun message(): String = TODO()
 
     override fun check(value: T): Boolean =
-        nested.invoke(value).isValid()
+        nested.applyTo(value).isValid()
 }
 
 internal data class ValidElementsConstraint<E, T: Collection<E>>(

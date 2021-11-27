@@ -1,32 +1,27 @@
 # kommodus
-Kotlin validation with a focus on readability
+Validation for Kotlin with a focus on readability and type-safety
 
 ```kotlin
 import com.github.kommodus.constraints.*
 import com.github.kommodus.Validation
 
-data class Test(val one: Int, val two: String?, val three: String, val four: Double?)
-data class Test2(val head: Test, val rest: List<Test>, val some: List<Long>)
+data class Geometry(val width: Int?, val height: Int?)
+data class Position(val x: Int?, val y: Int?)
+data class Changes(val geometry: Geometry?, val position: Position?)
 
-val instance1 = Test(1, "ha!", "", 45.0)
-val instance2 = Test2(instance1, listOf(instance1), listOf())
-
-Validation
-    .where(Test2::head).hasValidProperties(
-        Validation
-            .where(Test::one).minimum(5)
-            .where(Test::two).required().notBlank()
-            .where(Test::three).notBlank()
-    )
-    .where(Test2::rest).notEmpty().forEachElement {
-        it.hasValidProperties(
-            Validation
-                .where(Test::one).maximum(20)
-        )
+val validation = Validation
+    .whereInstanceOf<Changes>().withAtLeastOnePropertySet(Changes::geometry, Changes::position)
+    .andProperty(Changes::geometry)
+    .satisfies("Either height or width should be provided") {
+        (it.height == null) xor (it.width == null)
     }
-    .where(Test2::some).forEachElement { it.maximum(10) }
-    .invoke(instance2)
+    .passes(Validation
+        .whereProperty(Geometry::height).greaterThan(0)
+        .andProperty(Geometry::width).greaterThan(0)
+    )
+    .andProperty(Changes::position).withAtLeastOnePropertySet(Position::x, Position::y)
 
+validation.applyTo(Changes(Geometry(null, null), Position(10, null)))
 ```
 
 <p align="center">
