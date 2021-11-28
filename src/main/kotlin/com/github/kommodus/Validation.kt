@@ -5,12 +5,9 @@ import kotlin.reflect.KProperty1
 
 /**
  * TODO:
- *   - validate nested
- *   - validate collection
- *   - validate dependent fields
  *   - extensibility
- *   - composable
- *   - java beans interoperability
+ *   - composability
+ *   - tests
  */
 interface Validation<T> {
     fun applyTo(value: T): Result<T>
