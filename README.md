@@ -1,5 +1,5 @@
 # kommodus
-Validation for Kotlin with a focus on readability and type-safety
+Validation for Kotlin with a focus on readability and type-safety. Just start typying `Validation.` and it will guide you!
 
 ```kotlin
 import com.github.kommodus.constraints.*
