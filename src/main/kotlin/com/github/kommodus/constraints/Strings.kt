@@ -1,7 +1,7 @@
 package com.github.kommodus.constraints
 
-import com.github.kommodus.FieldDescriptor
-import com.github.kommodus.RepeatableDescriptor
+import com.github.kommodus.descriptors.FieldDescriptor
+import com.github.kommodus.descriptors.RepeatableDescriptor
 import com.github.kommodus.constraints.definitions.Matches
 import com.github.kommodus.constraints.definitions.NotBlank
 

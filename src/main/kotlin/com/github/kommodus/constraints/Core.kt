@@ -1,6 +1,6 @@
 package com.github.kommodus.constraints
 
-import com.github.kommodus.*
+import com.github.kommodus.descriptors.*
 import com.github.kommodus.constraints.definitions.*
 import kotlin.reflect.KProperty1
 
@@ -23,7 +23,7 @@ fun <T> ClassDescriptor<T>.satisfies(
     ifFailsMessage: String,
     predicate: (T) -> Boolean
 ): ClassDescriptor.Terminal<T> =
-    demands(Predicate(predicate, ifFailsMessage))
+    satisfies(Predicate(predicate, ifFailsMessage))
 
 fun <T, E, A: Collection<E>?> FieldDescriptor<T, A>.notEmpty(): FieldDescriptor.Terminal<T, A> =
     satisfies(NotEmpty<Collection<E>>().considerNullableInput())
@@ -47,4 +47,4 @@ fun <T> ClassDescriptor<T>.withAtLeastOnePropertySet(
     snd: KProperty1<T, Any?>,
     vararg rest: KProperty1<T, Any?>
 ): ClassDescriptor.Terminal<T> =
-    demands(AtLeastOnePropertyIsSet(fst, snd, *rest))
+    satisfies(AtLeastOnePropertyIsSet(fst, snd, *rest))

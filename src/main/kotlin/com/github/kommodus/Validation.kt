@@ -1,22 +1,21 @@
 package com.github.kommodus
 
+import com.github.kommodus.descriptors.ClassDescriptor
+import com.github.kommodus.descriptors.FieldDescriptor
+import com.github.kommodus.descriptors.ValidationDescriptor
+import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty1
+
+typealias ValidationErrors = Map<Validation.InvalidPath, List<Validation.InvalidCause<*>>>
 
 /**
  * TODO:
  *   - extensibility
- *   - composability
  *   - tests
  */
 interface Validation<T> {
     fun applyTo(value: T): Result<T>
-
-    interface Constraint<in T> {
-        fun message(): String
-
-        fun check(value: T): Boolean
-    }
 
     sealed class Result<T> {
         abstract fun isValid(): Boolean
@@ -27,9 +26,60 @@ interface Validation<T> {
             override fun isValid(): Boolean = true
         }
 
-        data class Invalid<T>(val errors: Map<KProperty<*>?, List<Constraint<*>>>): Result<T>() {
+        data class Invalid<T>(val errors: ValidationErrors): Result<T>() {
             override fun isValid(): Boolean = false
+
+            override fun toString(): String = asStringsMap().toString()
+
+            private fun asStringsMap(): Map<String, List<String>> =
+                errors.map { entry ->
+                    entry.key.plain() to entry.value.map { it.message }
+                }.toMap()
         }
+    }
+
+    @JvmInline
+    value class InvalidPath(val path: List<Segment>) {
+        fun prepend(segment: Segment): InvalidPath {
+            val updatable = path.toMutableList()
+            updatable.add(0, segment)
+            return InvalidPath(updatable)
+        }
+
+        fun plain(): String = path.joinToString(separator = ".") {
+            when (it) {
+                is Property -> it.value.name
+                is Index -> it.value.toString()
+            }
+        }
+
+        companion object {
+            fun empty() = InvalidPath(listOf())
+        }
+
+        sealed interface Segment
+
+        @JvmInline
+        value class Property(val value: KProperty<*>): Segment
+
+        @JvmInline
+        value class Index(val value: Int): Segment
+    }
+
+    data class InvalidCause<T: Constraint<T>>(val constraint: KClass<T>, val message: String)
+
+    sealed class Validator<in T> {
+        internal abstract fun validate(value: T): ValidationErrors
+    }
+
+    abstract class Constraint<in T>: Validator<T>() {
+        abstract fun message(): String
+
+        abstract fun check(value: T): Boolean
+
+        override fun validate(value: T): ValidationErrors =
+            if (check(value)) mapOf()
+            else mapOf(InvalidPath.empty() to listOf(InvalidCause(this::class, message())))
     }
 
     companion object {
@@ -41,167 +91,38 @@ interface Validation<T> {
     }
 }
 
-class ValidationDescriptor<T> internal constructor(
-    private val constraints: Map<KProperty1<T, *>?, ConstraintsRun<T>> = mapOf()
-): Validation<T> {
-    fun <A> whereProperty(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
-        FieldDescriptor.Opened(property, this)
-
-    fun whereInstance(): ClassDescriptor.Opened<T> =
-        ClassDescriptor.Opened(this)
-
-    override fun applyTo(value: T): Validation.Result<T> =
-        constraints.mapNotNull { entry ->
-            entry.value.run(value)?.let { entry.key to it }
-        }.let { propertiesViolations ->
-            if (propertiesViolations.isNotEmpty())
-                Validation.Result.Invalid(propertiesViolations.toMap())
-            else
-                Validation.Result.Valid(value)
-        }
-
-    internal class ConstraintsRun<T>(
-        val run: (T) -> List<Validation.Constraint<*>>?
-    ) {
-        companion object {
-            operator fun <T, A> invoke(
-                property: KProperty1<T, A>,
-                constraints: List<Validation.Constraint<A>>
-            ): ConstraintsRun<T> =
-                ConstraintsRun { instance ->
-                    collectFailedConstraints(constraints, property.get(instance))
-                }
-
-            operator fun <T> invoke(
-                constraints: List<Validation.Constraint<T>>
-            ): ConstraintsRun<T> =
-                ConstraintsRun { instance ->
-                    collectFailedConstraints(constraints, instance)
-                }
-
-            private fun <A> collectFailedConstraints(constraints: List<Validation.Constraint<A>>, value: A) =
-                constraints
-                    .mapNotNull { constraint ->
-                        if (constraint.check(value)) null else when (constraint) {
-                            is ValidNullableConstraint<*> -> constraint.inner
-                            else -> constraint
-                        }
-                    }
-                    .takeIf { it.isNotEmpty() }
-        }
-    }
-
-    internal fun <A> put(
-        property: KProperty1<T, A>,
-        constraints: List<Validation.Constraint<A>>
-    ): ValidationDescriptor<T> =
-        ValidationDescriptor(this.constraints + (property to ConstraintsRun(property, constraints)))
-
-    internal fun put(
-        constraints: List<Validation.Constraint<T>>
-    ): ValidationDescriptor<T> =
-        ValidationDescriptor(this.constraints + (null to ConstraintsRun(constraints)))
-}
-
-sealed class ClassDescriptor<T> {
-    abstract fun demands(constraint: Validation.Constraint<T>): Terminal<T>
-
-    class Opened<T> internal constructor(
-        private val container: ValidationDescriptor<T>
-    ): ClassDescriptor<T>() {
-        override fun demands(constraint: Validation.Constraint<T>): Terminal<T> =
-            Terminal(container, listOf(constraint))
-    }
-
-    class Terminal<T> internal constructor(
-        private val container: ValidationDescriptor<T>,
-        private val constraints: List<Validation.Constraint<T>>
-    ): ClassDescriptor<T>(), Validation<T> {
-        override fun demands(constraint: Validation.Constraint<T>): Terminal<T> =
-            Terminal(container, constraints + constraint)
-
-        fun <B> andProperty(property: KProperty1<T, B>): FieldDescriptor.Opened<T, B> =
-            container.put(constraints).whereProperty(property)
-
-        override fun applyTo(value: T): Validation.Result<T> =
-            container.put(constraints).applyTo(value)
-    }
-}
-
-sealed class RepeatableDescriptor<E> {
-    abstract fun satisfies(constraint: Validation.Constraint<E>): Terminal<E>
-
-    class Opened<E> internal constructor(): RepeatableDescriptor<E>() {
-        override fun satisfies(constraint: Validation.Constraint<E>): Terminal<E> =
-            Terminal(listOf(constraint))
-    }
-
-    class Terminal<E> internal constructor(
-        internal val constraints: List<Validation.Constraint<E>>
-    ): RepeatableDescriptor<E>() {
-        override fun satisfies(constraint: Validation.Constraint<E>): Terminal<E> =
-            Terminal(constraints + constraint)
-    }
-}
-
-sealed class FieldDescriptor<T, A> {
-    abstract fun satisfies(constraint: Validation.Constraint<A>): Terminal<T, A>
-
-    class Opened<T, A> internal constructor(
-        private val property: KProperty1<T, A>,
-        private val container: ValidationDescriptor<T>
-    ): FieldDescriptor<T, A>() {
-        override fun satisfies(constraint: Validation.Constraint<A>): Terminal<T, A> =
-            Terminal(property, container, listOf(constraint))
-    }
-
-    class Terminal<T, A> internal constructor(
-        private val property: KProperty1<T, A>,
-        private val container: ValidationDescriptor<T>,
-        private val constraints: List<Validation.Constraint<A>>
-    ): FieldDescriptor<T, A>(), Validation<T> {
-        override fun satisfies(constraint: Validation.Constraint<A>): Terminal<T, A> =
-            Terminal(property, container, constraints + constraint)
-
-        fun <B> andProperty(property: KProperty1<T, B>): Opened<T, B> =
-            container.put(this.property, constraints).whereProperty(property)
-
-        override fun applyTo(value: T): Validation.Result<T> =
-            container.put(this.property, constraints).applyTo(value)
-    }
-}
-
 /**
  * Wrapper constraint to provide single method definitions for the same nullable and non-nullable type
  * e.g. String and String?
  */
-internal data class ValidNullableConstraint<T>(
-    val inner: Validation.Constraint<T>
-): Validation.Constraint<T?> {
-    override fun message(): String = inner.message()
-
-    override fun check(value: T?): Boolean =
-        if (value == null) true else inner.check(value)
+internal data class NullableValueValidator<T>(
+    val inner: Validation.Validator<T>
+): Validation.Validator<T?>() {
+    override fun validate(value: T?): ValidationErrors =
+        if (value == null) mapOf() else inner.validate(value)
 }
 
-internal data class ValidIfAppliedConstraint<T>(
+internal data class InstanceFieldsValidator<T>(
     private val nested: Validation<T>
-): Validation.Constraint<T> {
-    override fun message(): String = TODO()
-
-    override fun check(value: T): Boolean =
-        nested.applyTo(value).isValid()
+): Validation.Validator<T>() {
+    override fun validate(value: T): ValidationErrors =
+        when (val result = nested.applyTo(value)) {
+            is Validation.Result.Valid -> mapOf()
+            is Validation.Result.Invalid -> result.errors
+        }
 }
 
-internal data class ValidElementsConstraint<E, T: Collection<E>>(
-    private val nested: List<Validation.Constraint<E>>
-): Validation.Constraint<T> {
-    override fun message(): String = TODO()
-
-    override fun check(value: T): Boolean =
+internal data class CollectionElementsValidator<E, T: Collection<E>>(
+    private val nested: List<Validation.Validator<E>>
+): Validation.Validator<T>() {
+    override fun validate(value: T): ValidationErrors =
         value.mapIndexedNotNull { i, element ->
-            nested.filter { it.check(element) }
-                .takeIf { it.isNotEmpty() }
-                ?.let { i to it }
-        }.isNotEmpty()
+            nested
+                .flatMap { it.validate(element).toList() }
+                // group causes by path
+                .groupBy({ it.first }, { it.second })
+                .map {
+                    it.key.prepend(Validation.InvalidPath.Index(i)) to it.value.flatten()
+                }
+        }.fold(mapOf()) { acc, indexResult -> acc + indexResult }
 }

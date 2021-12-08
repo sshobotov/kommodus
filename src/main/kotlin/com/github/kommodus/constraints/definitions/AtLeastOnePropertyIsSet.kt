@@ -5,7 +5,7 @@ import kotlin.reflect.KProperty1
 
 class AtLeastOnePropertyIsSet<T> private constructor(
     val of: Set<KProperty1<T, Any?>>
-): Validation.Constraint<T> {
+): Validation.Constraint<T>() {
     override fun check(value: T): Boolean {
         for (e in of) {
             if (e.get(value) != null) {
