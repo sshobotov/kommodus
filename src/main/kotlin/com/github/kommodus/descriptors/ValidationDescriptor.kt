@@ -34,28 +34,6 @@ class ValidationDescriptor<T> internal constructor(
         return if (errors.isEmpty()) Validation.Result.Valid(value) else Validation.Result.Invalid(errors)
     }
 
-    internal class ValidatorsRun<T>(val run: (T) -> ValidationErrors) {
-        companion object {
-            operator fun <T, A> invoke(
-                property: KProperty1<T, A>,
-                validators: List<Validation.Validator<A>>
-            ): ValidatorsRun<T> =
-                ValidatorsRun { validatedValue ->
-                    collectErrors(validators, property.get(validatedValue), property)
-                }
-
-            operator fun <T> invoke(
-                validators: List<Validation.Validator<T>>
-            ): ValidatorsRun<T> =
-                ValidatorsRun { validatedValue ->
-                    collectErrors(validators, validatedValue, property = null)
-                }
-
-            private fun <T> collectErrors(validators: List<Validation.Validator<T>>, value: T, property: KProperty<T>?) =
-                validators.validateAll(value, property?.let(Validation.InvalidPath::Property))
-        }
-    }
-
     internal fun <A> put(
         property: KProperty1<T, A>,
         constraints: List<Validation.Validator<A>>
@@ -66,4 +44,30 @@ class ValidationDescriptor<T> internal constructor(
         constraints: List<Validation.Validator<T>>
     ): ValidationDescriptor<T> =
         ValidationDescriptor(this.validators + (null to ValidatorsRun(constraints)))
+
+    /**
+     * Wraps the actual object validation execution to preserve types alignment for property and validator while keep
+     * validators aggregate generic enough
+     */
+    internal class ValidatorsRun<T>(val run: (T) -> ValidationErrors) {
+        companion object {
+            operator fun <T, A> invoke(
+                property: KProperty1<T, A>,
+                validators: List<Validation.Validator<A>>
+            ): ValidatorsRun<T> =
+                ValidatorsRun { validatedObject ->
+                    collectErrors(validators, property.get(validatedObject), property)
+                }
+
+            operator fun <T> invoke(
+                validators: List<Validation.Validator<T>>
+            ): ValidatorsRun<T> =
+                ValidatorsRun { validatedObject ->
+                    collectErrors(validators, validatedObject, property = null)
+                }
+
+            private fun <T> collectErrors(validators: List<Validation.Validator<T>>, value: T, property: KProperty<T>?) =
+                validators.validateAll(value, property?.let(Validation.InvalidPath::Property))
+        }
+    }
 }
