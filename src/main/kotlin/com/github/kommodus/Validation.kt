@@ -96,10 +96,10 @@ interface Validation<T> {
  * e.g. String and String?
  */
 internal data class NullableValueValidator<T>(
-    val inner: Validation.Validator<T>
+    private val nested: Validation.Validator<T>
 ): Validation.Validator<T?>() {
     override fun validate(value: T?): ValidationErrors =
-        if (value == null) mapOf() else inner.validate(value)
+        if (value == null) mapOf() else nested.validate(value)
 }
 
 internal data class InstanceFieldsValidator<T>(
@@ -116,13 +116,21 @@ internal data class CollectionElementsValidator<E, T: Collection<E>>(
     private val nested: List<Validation.Validator<E>>
 ): Validation.Validator<T>() {
     override fun validate(value: T): ValidationErrors =
-        value.mapIndexedNotNull { i, element ->
-            nested
-                .flatMap { it.validate(element).toList() }
-                // group causes by path
-                .groupBy({ it.first }, { it.second })
-                .map {
-                    it.key.prepend(Validation.InvalidPath.Index(i)) to it.value.flatten()
-                }
-        }.fold(mapOf()) { acc, indexResult -> acc + indexResult }
+        value
+            .mapIndexedNotNull { i, element -> nested.validateAll(element, Validation.InvalidPath.Index(i)) }
+            .fold(mapOf()) { acc, indexResult -> acc + indexResult }
 }
+
+internal fun <T> List<Validation.Validator<T>>.validateAll(
+    value: T,
+    segment: Validation.InvalidPath.Segment?
+): ValidationErrors =
+    this
+        .flatMap { it.validate(value).toList() }
+        // group causes by path
+        .groupBy({ it.first }, { it.second })
+        .entries
+        .associateBy(
+            { segment?.let(it.key::prepend) ?: it.key },
+            { it.value.flatten() }
+        )
