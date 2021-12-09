@@ -31,7 +31,7 @@ interface Validation<T> {
 
             override fun toString(): String = asStringsMap().toString()
 
-            private fun asStringsMap(): Map<String, List<String>> =
+            fun asStringsMap(): Map<String, List<String>> =
                 errors.map { entry ->
                     entry.key.plain() to entry.value.map { it.message }
                 }.toMap()

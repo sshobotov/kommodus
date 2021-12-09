@@ -6,6 +6,8 @@ import kotlin.reflect.KProperty1
 class AtLeastOnePropertyIsSet<T> private constructor(
     val of: Set<KProperty1<T, Any?>>
 ): Validation.Constraint<T>() {
+    override fun message(): String = "At least one of ${of.joinToString { it.name }} should be provided"
+
     override fun check(value: T): Boolean {
         for (e in of) {
             if (e.get(value) != null) {
@@ -14,8 +16,6 @@ class AtLeastOnePropertyIsSet<T> private constructor(
         }
         return false
     }
-
-    override fun message(): String = "At least one of ${of.joinToString { it.name }} should be set"
 
     companion object {
         operator fun <T> invoke(
