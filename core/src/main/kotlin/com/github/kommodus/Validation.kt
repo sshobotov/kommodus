@@ -12,8 +12,6 @@ typealias ValidationErrors = Map<Validation.InvalidPath, List<Validation.Invalid
 /**
  * TODO:
  * - more tests (validators and their composition)
- * - whys and output in doc
- * - examples as a separate module
  */
 
 /**
