@@ -11,11 +11,25 @@ typealias ValidationErrors = Map<Validation.InvalidPath, List<Validation.Invalid
 
 /**
  * TODO:
- *   - extensibility
- *   - tests
+ * - more tests (validators and their composition)
+ * - whys and output in doc
+ * - examples as a separate module
+ */
+
+/**
+ * Gives an ability to validate object providing paths to properties that failed
+ * validation with typed reason for that failure as a result
  */
 interface Validation<T> {
     fun applyTo(value: T): Result<T>
+
+    companion object {
+        fun <T, A> whereProperty(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
+            ValidationDescriptor<T>().whereProperty(property)
+
+        fun <T> whereInstanceOf(): ClassDescriptor.Opened<T> =
+            ValidationDescriptor<T>().whereInstance()
+    }
 
     sealed class Result<T> {
         abstract fun isValid(): Boolean
@@ -57,6 +71,9 @@ interface Validation<T> {
             fun empty() = InvalidPath(listOf())
         }
 
+        /**
+         * Represents one of the breadcrumbs on the failed path
+         */
         sealed interface Segment
 
         @JvmInline
@@ -68,10 +85,18 @@ interface Validation<T> {
 
     data class InvalidCause<T: Constraint<T>>(val constraint: KClass<T>, val message: String)
 
+    /**
+     * Base class to validate something specific about type T to be composed into Result,
+     * marked as internal to be used only by library implementation
+     */
     sealed class Validator<in T> {
         internal abstract fun validate(value: T): ValidationErrors
     }
 
+    /**
+     * Simplified validity check to expose a straightforward way for a user to define
+     * a custom validation logic that might be reused (otherwise use .satisfies(<predicate>))
+     */
     abstract class Constraint<in T>: Validator<T>() {
         abstract fun message(): String
 
@@ -81,19 +106,12 @@ interface Validation<T> {
             if (check(value)) mapOf()
             else mapOf(InvalidPath.empty() to listOf(InvalidCause(this::class, message())))
     }
-
-    companion object {
-        fun <T, A> whereProperty(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
-            ValidationDescriptor<T>().whereProperty(property)
-
-        fun <T> whereInstanceOf(): ClassDescriptor.Opened<T> =
-            ValidationDescriptor<T>().whereInstance()
-    }
 }
 
 /**
- * Wrapper constraint to provide single method definitions for the same nullable and non-nullable type
- * e.g. String and String?
+ * Wrapper validator to provide a way of reusing one validator definition
+ * for both nullable and non-nullable inputs (e.g. validate String and String?
+ * values having only Constraint<String>), see .consideringNullableInput()
  */
 internal data class NullableValueValidator<T>(
     private val nested: Validation.Validator<T>
@@ -102,6 +120,10 @@ internal data class NullableValueValidator<T>(
         if (value == null) mapOf() else nested.validate(value)
 }
 
+/**
+ * Validator to provide a way of validating nested object by composing Validation
+ * definitions for them
+ */
 internal data class InstanceFieldsValidator<T>(
     private val nested: Validation<T>
 ): Validation.Validator<T>() {
@@ -112,6 +134,10 @@ internal data class InstanceFieldsValidator<T>(
         }
 }
 
+/**
+ * Wrapper validator to apply validators and get failures for a specific elements
+ * of the collection (e.g. checking what numbers in collection are < 0)
+ */
 internal data class CollectionElementsValidator<E, T: Collection<E>>(
     private val nested: List<Validation.Validator<E>>
 ): Validation.Validator<T>() {
@@ -120,17 +146,3 @@ internal data class CollectionElementsValidator<E, T: Collection<E>>(
             .mapIndexedNotNull { i, element -> nested.validateAll(element, Validation.InvalidPath.Index(i)) }
             .fold(mapOf()) { acc, indexResult -> acc + indexResult }
 }
-
-internal fun <T> List<Validation.Validator<T>>.validateAll(
-    value: T,
-    segment: Validation.InvalidPath.Segment?
-): ValidationErrors =
-    this
-        .flatMap { it.validate(value).toList() }
-        // group causes by path
-        .groupBy({ it.first }, { it.second })
-        .entries
-        .associateBy(
-            { segment?.let(it.key::prepend) ?: it.key },
-            { it.value.flatten() }
-        )

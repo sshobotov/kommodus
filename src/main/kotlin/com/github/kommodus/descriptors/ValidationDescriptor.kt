@@ -18,9 +18,11 @@ import kotlin.reflect.KProperty1
  *   .andProperty(MyClass::one).lessThan(5)
  * </pre>
  */
-class ValidationDescriptor<T> internal constructor(
-    private val validators: Map<KProperty1<T, *>?, ValidatorsRun<T>> = mapOf()
+class ValidationDescriptor<T> private constructor(
+    private val validators: Map<KProperty1<T, *>?, ValidatorsRun<T>>
 ): Validation<T> {
+    constructor(): this(mapOf())
+
     fun <A> whereProperty(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
         FieldDescriptor.Opened(property, this)
 
@@ -49,7 +51,7 @@ class ValidationDescriptor<T> internal constructor(
      * Wraps the actual object validation execution to preserve types alignment for property and validator while keep
      * validators aggregate generic enough
      */
-    internal class ValidatorsRun<T>(val run: (T) -> ValidationErrors) {
+    private class ValidatorsRun<T>(val run: (T) -> ValidationErrors) {
         companion object {
             operator fun <T, A> invoke(
                 property: KProperty1<T, A>,

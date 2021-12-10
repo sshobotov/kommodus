@@ -2,18 +2,24 @@ package com.github.kommodus.constraints.definitions
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.property.Arb
-import io.kotest.property.arbitrary.map
-import io.kotest.property.arbitrary.string
 import io.kotest.property.arbitrary.stringPattern
 import io.kotest.property.forAll
 
 class MatchesTest: StringSpec({
-    "detects correctly whether string matches pattern" {
-        val regexGenerator = Arb.stringPattern("^\\^?[a-z.]+[?*+|]?[a-z]*\\$?$")
-            .map { Regex(it) }
+    "detects correctly when string matches pattern" {
+        val pattern = "^[a-z ]+!$"
+        val matcher = Matches(Regex(pattern), "test pattern")
 
-        forAll(regexGenerator, Arb.string()) { regex, value ->
-            Matches(regex, "test pattern").check(value) == regex.matches(value)
+        forAll(Arb.stringPattern(pattern)) { value ->
+            matcher.check(value)
+        }
+    }
+    "detects correctly when string doesn't match pattern" {
+        val pattern = "^[a-z ]+!$"
+        val matcher = Matches(Regex(pattern), "test pattern")
+
+        forAll(Arb.stringPattern("^[^!]*$")) { value ->
+            !matcher.check(value)
         }
     }
 })
