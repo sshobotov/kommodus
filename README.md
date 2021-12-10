@@ -12,15 +12,15 @@ data class Changes(val geometry: Geometry?, val position: Position?, val tags: S
 
 val validation = Validation
     .whereInstanceOf<Changes>()
-    .withAtLeastOnePropertySet(Changes::geometry, Changes::position, Changes::tags)
+        .withAtLeastOnePropertySet(Changes::geometry, Changes::position, Changes::tags)
     .andProperty(Changes::geometry)
-    .satisfies("Either height or width should be provided") {
-        (it.height == null) xor (it.width == null)
-    }
-    .passes(Validation
-        .whereProperty(Geometry::height).greaterThan(0)
-        .andProperty(Geometry::width).greaterThan(0)
-    )
+        .satisfies("Either height or width should be provided") {
+            (it.height == null) xor (it.width == null)
+        }
+        .passes(Validation
+            .whereProperty(Geometry::height).greaterThan(0)
+            .andProperty(Geometry::width).greaterThan(0)
+        )
     .andProperty(Changes::position).withAtLeastOnePropertySet(Position::x, Position::y)
     .andProperty(Changes::tags).withElementsEachAdheres {
         it.passes(Validation
