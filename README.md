@@ -14,22 +14,20 @@ data class Changes(val geometry: Geometry?, val position: Position?, val tags: S
 
 val validation = Validation
     .whereInstanceOf<Changes>()
-    .withAtLeastOnePropertySet(Changes::geometry, Changes::position, Changes::tags)
+        .withAtLeastOnePropertySet(Changes::geometry, Changes::position, Changes::tags)
     .andProperty(Changes::geometry)
-    .satisfies("Either height or width should be provided") {
-        (it.height == null) xor (it.width == null)
-    }
-    .passes(
-        Validation
+        .satisfies("Either height or width should be provided") {
+            (it.height == null) xor (it.width == null)
+        }
+        .passes(Validation
             .whereProperty(Geometry::height).greaterThan(0)
             .andProperty(Geometry::width).greaterThan(0)
-    )
+        )
     .andProperty(Changes::position).withAtLeastOnePropertySet(Position::x, Position::y)
     .andProperty(Changes::tags).withElementsEachAdheres {
-        it.passes(
-            Validation
-                .whereProperty(Tag::name).notBlank()
-                .andProperty(Tag::color).matches(Regex("^#[a-f0-9]{6}$", RegexOption.IGNORE_CASE), "color hex")
+        it.passes(Validation
+            .whereProperty(Tag::name).notBlank()
+            .andProperty(Tag::color).matches(Regex("^#[a-f0-9]{6}$", RegexOption.IGNORE_CASE), "color hex")
         )
     }
 
@@ -43,7 +41,10 @@ validation.applyTo(
 ```
 
 <p align="center">
-  <img src="https://allthingsd.com/files/2012/07/commodus_thumb.png" alt="he who decides"/>
+  <img src="./static/7QtQ.gif" alt="he who decides" />
+</p>
+<p align="center">
+  <sup><a href="https://gifer.com">via GIFER</a></sup>
 </p>
 
 
@@ -51,7 +52,7 @@ validation.applyTo(
 {geometry=[Either height or width should be provided], tags.1.color=[Value doesn't look like a color hex]}
 ```
 
-You may use simplified output like above, or you can customize and introspect it as you like.
+You may use simplified output like above, or you can customize output and introspect typed results as you like.
 
 ## Motivation
 
