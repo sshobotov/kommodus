@@ -4,9 +4,8 @@ import com.github.kommodus.Validation
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.datatest.withData
 import io.kotest.matchers.shouldBe
-import java.lang.Exception
 
-class ValidationDescriptorTest: StringSpec({
+class ValidationDescriptorTest : StringSpec({
     data class Video(val url: String, val author: String)
 
     fun <T> validator(reason: String, result: () -> Boolean = { false }) =
@@ -47,11 +46,13 @@ class ValidationDescriptorTest: StringSpec({
 
     "given multiple validators should report only failed" {
         val instance = ValidationDescriptor<Video>()
-            .put(Video::url, listOf(
-                validator("url validation #1"),
-                validator("url validation #2") { true },
-                validator("url validation #3"),
-            ))
+            .put(
+                Video::url, listOf(
+                    validator("url validation #1"),
+                    validator("url validation #2") { true },
+                    validator("url validation #3"),
+                )
+            )
 
         val result = instance.applyTo(Video("test.co/video", "Maximus"))
 
@@ -62,11 +63,13 @@ class ValidationDescriptorTest: StringSpec({
 
     "given multiple validators should not report errors if all are valid" {
         val instance = ValidationDescriptor<Video>()
-            .put(Video::url, listOf(
-                validator("url validation #1") { true },
-                validator("url validation #2") { true },
-                validator("url validation #3") { true },
-            ))
+            .put(
+                Video::url, listOf(
+                    validator("url validation #1") { true },
+                    validator("url validation #2") { true },
+                    validator("url validation #3") { true },
+                )
+            )
         val verified = Video("test.co/video", "Maximus")
 
         val result = instance.applyTo(verified)
@@ -75,11 +78,13 @@ class ValidationDescriptorTest: StringSpec({
     }
 
     "given no validators should not report errors" {
-        withData(listOf(
-            ValidationDescriptor(),
-            ValidationDescriptor<Video>().put(listOf()),
-            ValidationDescriptor<Video>().put(Video::url, listOf()),
-        )) { instance ->
+        withData(
+            listOf(
+                ValidationDescriptor(),
+                ValidationDescriptor<Video>().put(listOf()),
+                ValidationDescriptor<Video>().put(Video::url, listOf()),
+            )
+        ) { instance ->
             val verified = Video("test.co/video", "Maximus")
 
             val result = instance.applyTo(verified)

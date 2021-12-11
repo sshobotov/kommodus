@@ -5,7 +5,7 @@ import io.kotest.property.Arb
 import io.kotest.property.arbitrary.int
 import io.kotest.property.forAll
 
-class MinimumTest: StringSpec({
+class MinimumTest : StringSpec({
     "detects correctly whether number is greater than expected" {
         forAll(Arb.int(), Arb.int()) { value, limit ->
             Minimum(limit, inclusive = false).check(value) == (value > limit)

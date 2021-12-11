@@ -1,13 +1,16 @@
 package com.github.kommodus.constraints
 
-import com.github.kommodus.descriptors.*
-import com.github.kommodus.constraints.definitions.*
 import com.github.kommodus.consideringNullableInput
+import com.github.kommodus.constraints.definitions.Predicate
+import com.github.kommodus.constraints.definitions.Required
+import com.github.kommodus.descriptors.ClassDescriptor
+import com.github.kommodus.descriptors.FieldDescriptor
+import com.github.kommodus.descriptors.RepeatableDescriptor
 
 fun <T, A> FieldDescriptor<T, A?>.required(): FieldDescriptor.Terminal<T, A?> =
     satisfies(Required())
 
-fun <T, C, A: C?> FieldDescriptor<T, A>.satisfies(
+fun <T, C, A : C?> FieldDescriptor<T, A>.satisfies(
     ifFailsMessage: String,
     predicate: (C) -> Boolean
 ): FieldDescriptor.Terminal<T, A> =

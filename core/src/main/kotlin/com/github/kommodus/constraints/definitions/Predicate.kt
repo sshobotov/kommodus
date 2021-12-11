@@ -8,7 +8,7 @@ import com.github.kommodus.Validation
 class Predicate<T>(
     private val predicate: (T) -> Boolean,
     private val ifFailsMessage: String
-): Validation.Constraint<T>(), StdConstraint {
+) : Validation.Constraint<T>(), StdConstraint {
     override fun check(value: T): Boolean = predicate(value)
 
     override fun message(): String = ifFailsMessage

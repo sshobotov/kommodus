@@ -1,6 +1,7 @@
 package com.github.kommodus.descriptors
 
 import com.github.kommodus.Validation
+import com.github.kommodus.Validator
 import com.github.kommodus.ValidationErrors
 import com.github.kommodus.validateAll
 import kotlin.reflect.KProperty
@@ -20,8 +21,8 @@ import kotlin.reflect.KProperty1
  */
 class ValidationDescriptor<T> private constructor(
     private val validators: Map<KProperty1<T, *>?, ValidatorsRun<T>>
-): Validation<T> {
-    constructor(): this(mapOf())
+) : Validation<T> {
+    constructor() : this(mapOf())
 
     fun <A> whereProperty(property: KProperty1<T, A>): FieldDescriptor.Opened<T, A> =
         FieldDescriptor.Opened(property, this)
@@ -38,12 +39,12 @@ class ValidationDescriptor<T> private constructor(
 
     internal fun <A> put(
         property: KProperty1<T, A>,
-        constraints: List<Validation.Validator<A>>
+        constraints: List<Validator<A>>
     ): ValidationDescriptor<T> =
         ValidationDescriptor(this.validators + (property to ValidatorsRun(property, constraints)))
 
     internal fun put(
-        constraints: List<Validation.Validator<T>>
+        constraints: List<Validator<T>>
     ): ValidationDescriptor<T> =
         ValidationDescriptor(this.validators + (null to ValidatorsRun(constraints)))
 
@@ -55,20 +56,24 @@ class ValidationDescriptor<T> private constructor(
         companion object {
             operator fun <T, A> invoke(
                 property: KProperty1<T, A>,
-                validators: List<Validation.Validator<A>>
+                validators: List<Validator<A>>
             ): ValidatorsRun<T> =
                 ValidatorsRun { validatedObject ->
                     collectErrors(validators, property.get(validatedObject), property)
                 }
 
             operator fun <T> invoke(
-                validators: List<Validation.Validator<T>>
+                validators: List<Validator<T>>
             ): ValidatorsRun<T> =
                 ValidatorsRun { validatedObject ->
                     collectErrors(validators, validatedObject, property = null)
                 }
 
-            private fun <T> collectErrors(validators: List<Validation.Validator<T>>, value: T, property: KProperty<T>?) =
+            private fun <T> collectErrors(
+                validators: List<Validator<T>>,
+                value: T,
+                property: KProperty<T>?
+            ) =
                 validators.validateAll(value, property?.let(Validation.InvalidPath::Property))
         }
     }

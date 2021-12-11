@@ -1,9 +1,9 @@
 package com.github.kommodus
 
-fun <T> Validation.Validator<T>.consideringNullableInput(): Validation.Validator<T?> =
+fun <T> Validator<T>.consideringNullableInput(): Validator<T?> =
     NullableValueValidator(this)
 
-internal fun <T> List<Validation.Validator<T>>.validateAll(
+internal fun <T> List<Validator<T>>.validateAll(
     value: T,
     segment: Validation.InvalidPath.Segment?
 ): ValidationErrors =
@@ -14,5 +14,5 @@ internal fun <T> List<Validation.Validator<T>>.validateAll(
         .entries
         .associateBy(
             { segment?.let(it.key::prepend) ?: it.key },
-            { it.value.flatten() }
+            { it.value.flatten().distinct() }
         )

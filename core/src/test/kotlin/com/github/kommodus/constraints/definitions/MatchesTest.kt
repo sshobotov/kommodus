@@ -5,7 +5,7 @@ import io.kotest.property.Arb
 import io.kotest.property.arbitrary.stringPattern
 import io.kotest.property.forAll
 
-class MatchesTest: StringSpec({
+class MatchesTest : StringSpec({
     "detects correctly when string matches pattern" {
         val pattern = "^[a-z ]+!$"
         val matcher = Matches(Regex(pattern), "test pattern")

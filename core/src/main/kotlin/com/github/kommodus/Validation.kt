@@ -10,13 +10,9 @@ import kotlin.reflect.KProperty1
 typealias ValidationErrors = Map<Validation.InvalidPath, List<Validation.InvalidCause<*>>>
 
 /**
- * TODO:
- * - more tests (validators and their composition)
- */
-
-/**
- * Gives an ability to validate object providing paths to properties that failed
- * validation with typed reason for that failure as a result
+ * Gives an ability to validate object returning paths to properties that failed
+ * validation with typed reason for that failure as a result, abstraction for a
+ * set of validators/constraints
  */
 interface Validation<T> {
     fun applyTo(value: T): Result<T>
@@ -34,11 +30,11 @@ interface Validation<T> {
 
         fun isInvalid(): Boolean = !isValid()
 
-        data class Valid<T>(val value: T): Result<T>() {
+        data class Valid<T>(val value: T) : Result<T>() {
             override fun isValid(): Boolean = true
         }
 
-        data class Invalid<T>(val errors: ValidationErrors): Result<T>() {
+        data class Invalid<T>(val errors: ValidationErrors) : Result<T>() {
             override fun isValid(): Boolean = false
 
             override fun toString(): String = asStringsMap().toString()
@@ -75,27 +71,19 @@ interface Validation<T> {
         sealed interface Segment
 
         @JvmInline
-        value class Property(val value: KProperty<*>): Segment
+        value class Property(val value: KProperty<*>) : Segment
 
         @JvmInline
-        value class Index(val value: Int): Segment
+        value class Index(val value: Int) : Segment
     }
 
-    data class InvalidCause<T: Constraint<T>>(val constraint: KClass<T>, val message: String)
-
+    data class InvalidCause<T : Constraint<T>>(val constraint: KClass<T>, val message: String)
+    
     /**
-     * Base class to validate something specific about type T to be composed into Result,
-     * marked as internal to be used only by library implementation
+     * Simpler validity check abstraction than Validator, exposes a straightforward way for a user to define
+     * reusable predicate-like validation and a descriptive reason message if check has been failed
      */
-    sealed class Validator<in T> {
-        internal abstract fun validate(value: T): ValidationErrors
-    }
-
-    /**
-     * Simplified validity check to expose a straightforward way for a user to define
-     * a custom validation logic that might be reused (otherwise use .satisfies(<predicate>))
-     */
-    abstract class Constraint<in T>: Validator<T>() {
+    abstract class Constraint<in T> : Validator<T>() {
         abstract fun message(): String
 
         abstract fun check(value: T): Boolean
@@ -107,24 +95,32 @@ interface Validation<T> {
 }
 
 /**
+ * Base class to validate something specific about type T to be composed into Validation.Result,
+ * marked as internal to be used only by library implementation
+ */
+sealed class Validator<in T> {
+    internal abstract fun validate(value: T): ValidationErrors
+}
+
+/**
  * Wrapper validator to provide a way of reusing one validator definition
  * for both nullable and non-nullable inputs (e.g. validate String and String?
- * values having only Constraint<String>), see .consideringNullableInput()
+ * values having only Validator<String>), see .consideringNullableInput() extension
  */
 internal data class NullableValueValidator<T>(
-    private val nested: Validation.Validator<T>
-): Validation.Validator<T?>() {
+    private val nested: Validator<T>
+) : Validator<T?>() {
     override fun validate(value: T?): ValidationErrors =
         if (value == null) mapOf() else nested.validate(value)
 }
 
 /**
- * Validator to provide a way of validating nested object by composing Validation
- * definitions for them
+ * Validator to provide a way of validating nested object by composing a Validation
+ * definition for that object's type
  */
 internal data class InstanceFieldsValidator<T>(
     private val nested: Validation<T>
-): Validation.Validator<T>() {
+) : Validator<T>() {
     override fun validate(value: T): ValidationErrors =
         when (val result = nested.applyTo(value)) {
             is Validation.Result.Valid -> mapOf()
@@ -136,9 +132,9 @@ internal data class InstanceFieldsValidator<T>(
  * Wrapper validator to apply validators and get failures for a specific elements
  * of the collection (e.g. checking what numbers in collection are < 0)
  */
-internal data class CollectionElementsValidator<E, T: Collection<E>>(
-    private val nested: List<Validation.Validator<E>>
-): Validation.Validator<T>() {
+internal data class CollectionElementsValidator<E, T : Collection<E>>(
+    private val nested: List<Validator<E>>
+) : Validator<T>() {
     override fun validate(value: T): ValidationErrors =
         value
             .mapIndexedNotNull { i, element -> nested.validateAll(element, Validation.InvalidPath.Index(i)) }
